@@ -102,7 +102,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="side-foot">
-      Engineered for the PolicyBazaar pitch through <b style={{ color: '#D60000' }}>Havas Converged</b> · Media &amp; Biddable Intelligence.
+     <b style={{ color: '#D60000' }}>Havas Converged</b>
 
       </div>
     </aside>

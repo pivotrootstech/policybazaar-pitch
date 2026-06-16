@@ -1,184 +1,380 @@
 'use client';
+import { useEffect, useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, ArcElement, BubbleController, Title, Tooltip, Legend,
+  PointElement, ArcElement, BubbleController, Title, Tooltip, Legend, Filler,
 } from 'chart.js';
-import { Bar, Bubble, Line } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import { C } from '@/lib/colors';
-import { PERF_FUNNEL, PIPELINE_FUNNEL } from '@/lib/data';
-import KpiCard from '@/components/ui/KpiCard';
-import FunnelChart from '@/components/ui/FunnelChart';
+import type { CoinDCXRow } from '@/app/api/coindcx/route';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, BubbleController, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, BubbleController, Title, Tooltip, Legend, Filler);
 
 const GRID   = { color: '#EEF2F8', drawTicks: false as const };
 const noGrid = { display: false };
 
-const PERF_TABLE = [
-  { channel: 'Search',   color: C.pb,     clicks: '18.2 M', ctl: '23%', cpl: '₹212', cvr: '9.4%', verified: '2.9 M', cpv: '₹318' },
-  { channel: 'Social',   color: C.violet, clicks:  '9.1 M', ctl: '17%', cpl: '₹248', cvr: '5.2%', verified: '0.9 M', cpv: '₹402' },
-  { channel: 'YouTube',  color: C.pbBright,clicks: '8.0 M', ctl: '19%', cpl: '₹268', cvr: '6.8%', verified: '0.8 M', cpv: '₹389' },
-  { channel: 'Display',  color: C.amber,  clicks:  '5.9 M', ctl: '12%', cpl: '₹392', cvr: '4.1%', verified: '0.3 M', cpv: '₹611' },
-];
+/* ── number formatters ───────────────────────────────────────────────────── */
+function fmtBig(n: number): string {
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
+  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)         return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+}
+function fmtINR(n: number): string {
+  return '₹' + n.toLocaleString('en-IN');
+}
+function bestIdx(arr: number[], higher = true): number {
+  let idx = 0;
+  arr.forEach((v, i) => {
+    if (higher ? v > arr[idx] : v < arr[idx]) idx = i;
+  });
+  return idx;
+}
 
-const PIPELINE_TABLE = [
-  { product: 'Health',      color: C.cyan,   leads: '3.40 M', contacted: '2.62 M', quote: '1.71 M', callback: '0.46 M', payment: '0.16 M', converted: '0.27 M', dropped: '1.71 M' },
-  { product: 'Term',        color: C.pb,     leads: '2.10 M', contacted: '1.55 M', quote: '0.96 M', callback: '0.31 M', payment: '0.11 M', converted: '0.13 M', dropped: '1.20 M' },
-  { product: 'Motor',       color: C.violet, leads: '2.40 M', contacted: '1.78 M', quote: '1.18 M', callback: '0.28 M', payment: '0.08 M', converted: '0.17 M', dropped: '1.30 M' },
-  { product: 'Investments', color: C.amber,  leads: '0.70 M', contacted: '0.45 M', quote: '0.25 M', callback: '0.07 M', payment: '0.03 M', converted: '0.04 M', dropped: '0.34 M' },
-];
+/* ── funnel component ────────────────────────────────────────────────────── */
+function CoinFunnel({ row }: { row: CoinDCXRow }) {
+  const stages = [
+    { label: 'Impressions', sub: 'top of funnel',  value: row.impressions, color: C.ink },
+    { label: 'Clicks',      sub: 'paid traffic',   value: row.clicks,      color: C.pb },
+    { label: 'Installs',    sub: 'app installs',   value: row.installs,    color: C.cyan },
+    { label: 'Signups',     sub: 'registrations',  value: row.signups,     color: C.violet },
+    { label: 'NAPs',        sub: 'next action',    value: row.naps,        color: C.green },
+  ];
+  const max = stages[0].value;
+  return (
+    <div className="funnel">
+      {stages.map((s, i) => {
+        const w = Math.max(12, (s.value / max) * 100);
+        const prev = stages[i - 1];
+        const dropPct = i === 0 ? null : (((prev.value - s.value) / prev.value) * 100).toFixed(1);
+        const convPct = i === 0 ? '100%' : ((s.value / prev.value) * 100).toFixed(1) + '%';
+        const convColor = i === 0 ? C.muted : parseFloat(convPct) > 40 ? C.green : C.amber;
+        return (
+          <div className="fstep" key={s.label}>
+            <div className="ftag">{s.label}<small>{s.sub}</small></div>
+            <div className="barwrap">
+              <div className="fbar" style={{ width: `${w}%`, background: s.color }}>
+                <span className="mono">{fmtBig(s.value)}</span>
+              </div>
+            </div>
+            <div className="fconv">
+              <span style={{ color: convColor }}>{convPct}</span>
+              <small>{i === 0 ? 'entry' : dropPct ? `↓ ${dropPct}% drop` : 'step conv'}</small>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
+/* ── main view ───────────────────────────────────────────────────────────── */
 export default function PerformanceView() {
+  const [data, setData]       = useState<CoinDCXRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+  const [window, setWindow]   = useState<6 | 12 | 25>(6);
+
+  useEffect(() => {
+    fetch('/api/coindcx')
+      .then(r => r.json())
+      .then(json => { setData(json.data ?? []); setLoading(false); })
+      .catch(() => { setError('Failed to load data'); setLoading(false); });
+  }, []);
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 14 }}>Loading CoinDCX data…</div>;
+  if (error || !data.length) return <div style={{ padding: 40, textAlign: 'center', color: C.red, fontSize: 14 }}>{error || 'No data'}</div>;
+
+  const latest    = data[data.length - 1];                // most recent month (June'26)
+  const prev      = data[data.length - 2];
+  const filtered  = data.slice(-window);                  // respects the period toggle
+  const months    = filtered.map(d => d.month);
+
+  /* ── KPI deltas vs previous month ──────────────────────────────────────── */
+  function delta(curr: number, p: number) {
+    const pct = ((curr - p) / p * 100).toFixed(1);
+    return `${Number(pct) >= 0 ? '▲' : '▼'} ${Math.abs(Number(pct))}% MoM`;
+  }
+  function deltaType(curr: number, p: number): 'up' | 'dn' {
+    return curr >= p ? 'up' : 'dn';
+  }
+
+  /* ── best-value highlight for scorecard table (always last 6) ────────────*/
+  const tableRows = filtered;
+  const bestCTR  = bestIdx(tableRows.map(r => r.ctr));
+  const bestCPI  = bestIdx(tableRows.map(r => r.cpi), false);
+  const bestCPS  = bestIdx(tableRows.map(r => r.cps), false);
+  const bestInst = bestIdx(tableRows.map(r => r.installs));
+  const bestSig  = bestIdx(tableRows.map(r => r.signups));
+  const bestNaps = bestIdx(tableRows.map(r => r.naps));
+
+  const greenCell: React.CSSProperties = {
+    color: '#047a52', fontWeight: 800, background: '#ECFDF5',
+    borderRadius: 6, padding: '2px 6px',
+  };
+
   return (
     <>
       <div className="view-head">
         <div>
           <div className="eyebrow">Performance · Lower Funnel</div>
-          <h2>From Impression to Conversion</h2>
-          <p>Tracking the entire funnel beyond GRP &amp; CPL.</p>
+          <h2>CoinDCX — Month-on-Month Intelligence</h2>
+          <p>
+            Impressions → Clicks → Installs → Signups → NAPs · Latest: <b>{latest.month}</b> · Jun 2024 – Jun 2026
+          </p>
         </div>
-        <div className="view-meta">Window: <b>FY 26–27 YTD</b><br />Lead = high-intent enquiry · Policy = issued</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+          {/* Period toggle */}
+          <div className="seg">
+            {([6, 12, 25] as const).map(w => (
+              <button
+                key={w}
+                className={window === w ? 'on' : ''}
+                onClick={() => setWindow(w)}
+              >
+                {w === 6 ? '6M' : w === 12 ? '1Y' : '2Y'}
+              </button>
+            ))}
+          </div>
+          <div className="view-meta" style={{ textAlign: 'right' }}>
+            Source: <b>CoinDCX M-O-M Dataset</b><br />
+            Showing: <b>{window === 25 ? 'Jun 24 – Jun 26' : window === 12 ? 'Last 12 months' : 'Last 6 months'}</b>
+          </div>
+        </div>
       </div>
 
-      <div className="grid g4">
-        <KpiCard accentColor={C.cyan}   name="Clicks"           value="41.2" valueSuffix="M" delta="▲ 16% YoY" />
-        <KpiCard accentColor={C.pb}     name="Sessions"         value="33.0" valueSuffix="M" delta="▲ 80% click→session" />
-        <KpiCard accentColor={C.amber}  name="CTL · Click→Lead" value="20.9" valueSuffix="%" delta="▲ +1.4pp" />
-        <KpiCard accentColor={C.green}  name="Lead → Conversion" value="7.1"  valueSuffix="%" delta="▲ +0.6pp" />
+      {/* ── KPI strip — 5 raw metrics ────────────────────────────────────── */}
+      <div className="grid g5">
+        {/* Impressions */}
+        <div className="card kpi">
+          <div className="accent" style={{ background: C.ink }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div className="topline"><span className="name">Impressions</span></div>
+            <div className="val">{fmtBig(latest.impressions)}</div>
+            <div className={`delta ${deltaType(latest.impressions, prev.impressions)}`}>{delta(latest.impressions, prev.impressions)}</div>
+            <div className="foot"><span>Total paid impressions</span><span>{latest.month}</span></div>
+          </div>
+        </div>
+        {/* Clicks */}
+        <div className="card kpi">
+          <div className="accent" style={{ background: C.pb }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div className="topline"><span className="name">Clicks</span></div>
+            <div className="val">{fmtBig(latest.clicks)}</div>
+            <div className={`delta ${deltaType(latest.clicks, prev.clicks)}`}>{delta(latest.clicks, prev.clicks)}</div>
+            <div className="foot"><span>CTR {latest.ctr}%</span><span>{latest.month}</span></div>
+          </div>
+        </div>
+        {/* Spends */}
+        <div className="card kpi">
+          <div className="accent" style={{ background: C.amber }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div className="topline"><span className="name">Spends</span></div>
+            <div className="val">{fmtINR(latest.spends)}</div>
+            <div className={`delta ${deltaType(prev.spends, latest.spends)}`}>{delta(prev.spends, latest.spends)}</div>
+            <div className="foot"><span>Total media spend</span><span>{latest.month}</span></div>
+          </div>
+        </div>
+        {/* Installs */}
+        <div className="card kpi">
+          <div className="accent" style={{ background: C.cyan }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div className="topline"><span className="name">Installs</span></div>
+            <div className="val">{fmtBig(latest.installs)}</div>
+            <div className={`delta ${deltaType(latest.installs, prev.installs)}`}>{delta(latest.installs, prev.installs)}</div>
+            <div className="foot"><span>CPI {fmtINR(latest.cpi)}</span><span>{latest.month}</span></div>
+          </div>
+        </div>
+        {/* Signups */}
+        <div className="card kpi">
+          <div className="accent" style={{ background: C.violet }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div className="topline"><span className="name">Signups</span></div>
+            <div className="val">{fmtBig(latest.signups)}</div>
+            <div className={`delta ${deltaType(latest.signups, prev.signups)}`}>{delta(latest.signups, prev.signups)}</div>
+            <div className="foot"><span>CPS {fmtINR(latest.cps)}</span><span>{latest.month}</span></div>
+          </div>
+        </div>
       </div>
 
-      {/* Bubble + Funnel */}
-      <div className="grid g32">
+      {/* ── Funnel + Total spend card ─────────────────────────────────────── */}
+      <div className="grid g23">
         <div className="card">
-          <div className="card-h"><h3>Channel efficiency matrix</h3><span className="hint">bubble = lead volume</span></div>
-          <div className="card-sub">X = cost per lead, Y = lead→policy conversion. Top-left is the sweet spot: cheap leads that convert well.</div>
-          <div className="chh lg">
-            <Bubble
-              data={{ datasets: [
-                { label: 'Search',  data: [{ x: 212, y: 9.4, r: 28 }], backgroundColor: C.pb      + 'cc' },
-                { label: 'YouTube', data: [{ x: 268, y: 6.8, r: 22 }], backgroundColor: C.pbBright + 'cc' },
-                { label: 'Social',  data: [{ x: 248, y: 5.2, r: 24 }], backgroundColor: C.violet  + 'cc' },
-                { label: 'Display', data: [{ x: 392, y: 4.1, r: 14 }], backgroundColor: C.amber   + 'cc' },
-              ] }}
-              options={{ responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: CPL ₹${(c.raw as {x:number}).x}, CVR ${(c.raw as {y:number}).y}%` } } },
-                scales: {
-                  x: { grid: GRID, title: { display: true, text: 'Cost per lead (₹) — cheaper ←' }, reverse: true },
-                  y: { grid: GRID, title: { display: true, text: 'Lead → conversion %' }, ticks: { callback: v => v + '%' } },
-                } }}
+          <div className="card-h">
+            <h3>Conversion Funnel — {latest.month}</h3>
+            <span className="hint">Impressions → NAPs · % retained at each stage</span>
+          </div>
+          <div className="card-sub">Absolute volumes with stage drop-off. Latest month default; data covers 25 months.</div>
+          <CoinFunnel row={latest} />
+          <div className="statline" style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 14, justifyContent: 'space-around' }}>
+            <div className="s"><span className="v" style={{ color: C.pb }}>{((latest.clicks / latest.impressions) * 100).toFixed(2)}%</span><span className="l">CTR</span></div>
+            <div className="s"><span className="v" style={{ color: C.cyan }}>{fmtINR(latest.cpi)}</span><span className="l">Cost / Install</span></div>
+            <div className="s"><span className="v" style={{ color: C.violet }}>{((latest.signups / latest.installs) * 100).toFixed(1)}%</span><span className="l">Install → Signup</span></div>
+            <div className="s"><span className="v" style={{ color: C.amber }}>{fmtINR(latest.cps)}</span><span className="l">Cost / Signup</span></div>
+          </div>
+        </div>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+          <div className="card-h" style={{ marginBottom: 2 }}><h3>June &apos;26 Snapshot</h3><span className="hint">latest month</span></div>
+          {[
+            { label: 'Total Impressions', value: fmtBig(latest.impressions), color: C.ink },
+            { label: 'Total Clicks',      value: fmtBig(latest.clicks),      color: C.pb },
+            { label: 'Total Spends',      value: fmtINR(latest.spends),      color: C.amber },
+            { label: 'App Installs',      value: fmtBig(latest.installs),    color: C.cyan },
+            { label: 'Signups',           value: fmtBig(latest.signups),     color: C.violet },
+            { label: 'NAPs',              value: fmtBig(latest.naps),        color: C.green },
+          ].map(s => (
+            <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{s.label}</span>
+              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 17, fontWeight: 700, color: s.color }}>{s.value}</span>
+            </div>
+          ))}
+          <div className="insight" style={{ marginTop: 'auto' }}>
+            <div className="ico">!</div>
+            <div className="txt"><b>June spike:</b> Partial-month data — spends (₹{fmtINR(latest.spends)}) and installs ({fmtBig(latest.installs)}) reflect ~first week of June only.</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── MoM trend chart ──────────────────────────────────────────────── */}
+      <div className="card">
+        <div className="card-h">
+          <h3>Month-on-Month Trend — Installs, Signups &amp; NAPs</h3>
+          <span className="hint">{months[0]} – {months[months.length - 1]} · {filtered.length} months</span>
+        </div>
+        <div className="card-sub">Volume trend for the selected period. Switch periods using the 6M / 1Y / 2Y toggle above.</div>
+        <div className="chh lg">
+          <Line
+            key={`trend-${window}`}
+            data={{
+              labels: months,
+              datasets: [
+                {
+                  label: 'Installs',
+                  data: filtered.map(d => d.installs),
+                  borderColor: C.cyan, backgroundColor: C.cyan + '18',
+                  borderWidth: 2.5, tension: 0.4, pointRadius: 3, pointBackgroundColor: C.cyan, fill: false,
+                },
+                {
+                  label: 'Signups',
+                  data: filtered.map(d => d.signups),
+                  borderColor: C.violet, backgroundColor: C.violet + '18',
+                  borderWidth: 2.5, tension: 0.4, pointRadius: 3, pointBackgroundColor: C.violet, fill: false,
+                },
+                {
+                  label: 'NAPs',
+                  data: filtered.map(d => d.naps),
+                  borderColor: C.green, backgroundColor: C.green + '22',
+                  borderWidth: 2, tension: 0.4, pointRadius: 3, pointBackgroundColor: C.green, fill: true,
+                },
+              ],
+            }}
+            options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmtBig(c.raw as number)}` } },
+              },
+              scales: {
+                x: { grid: noGrid, ticks: { maxRotation: 45, font: { size: 10 } } },
+                y: { grid: GRID, ticks: { callback: v => fmtBig(Number(v)) } },
+              },
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Spends & CTR trend ────────────────────────────────────────────── */}
+      <div className="grid g2">
+        <div className="card">
+          <div className="card-h"><h3>Monthly Spends (₹)</h3><span className="hint">total media spend</span></div>
+          <div className="chh">
+            <Bar
+              key={`spends-${window}`}
+              data={{
+                labels: months,
+                datasets: [{
+                  label: 'Spends (₹)',
+                  data: filtered.map(d => d.spends),
+                  backgroundColor: filtered.map((_, i) => i === filtered.length - 1 ? C.amber : C.amber + '88'),
+                  borderRadius: 4,
+                }],
+              }}
+              options={{
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${fmtINR(c.raw as number)}` } } },
+                scales: { x: { grid: noGrid, ticks: { maxRotation: 45, font: { size: 10 } } }, y: { grid: GRID, ticks: { callback: v => fmtINR(Number(v)) } } },
+              }}
             />
           </div>
         </div>
         <div className="card">
-          <div className="card-h"><h3>Performance funnel</h3><span className="hint">all paid digital</span></div>
-          <FunnelChart steps={PERF_FUNNEL} />
-        </div>
-      </div>
-
-      {/* Category charts + CPL */}
-      <div className="grid g3">
-        <div className="card">
-          <div className="card-h"><h3>Leads by category</h3><span className="hint">Health · Term · Motor · Investments</span></div>
+          <div className="card-h"><h3>CTR &amp; CPI Trend</h3><span className="hint">efficiency over time</span></div>
           <div className="chh">
-            <Bar data={{ labels: ['Health','Term','Motor','Investments'], datasets: [{ label: 'Leads (M)', data: [3.4,2.1,2.4,0.7], backgroundColor: [C.cyan,C.pb,C.violet,C.amber], borderRadius: 6 }] }}
-              options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.raw}M leads` } } }, scales: { x: { grid: noGrid }, y: { grid: GRID, title: { display: true, text: 'Leads (M)' } } } }} />
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-h"><h3>Spends by category</h3><span className="hint">₹ Cr · paid digital</span></div>
-          <div className="chh">
-            <Bar data={{ labels: ['Health','Term','Motor','Investments'], datasets: [{ label: 'Spend (₹ Cr)', data: [9.8,7.4,5.1,2.9], backgroundColor: [C.cyan,C.pb,C.violet,C.amber], borderRadius: 6 }] }}
-              options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ₹${c.raw} Cr` } } }, scales: { x: { grid: noGrid }, y: { grid: GRID, title: { display: true, text: 'Spend (₹ Cr)' } } } }} />
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-h"><h3>Cost-per-lead trend</h3><span className="hint">₹ · rolling monthly</span></div>
-          <div className="chh">
-            <Line data={{ labels: ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], datasets: [
-              { label: 'Blended',     data: [321,312,305,298,294,289,278,272,284], borderColor: C.ink,      borderWidth: 2.5, borderDash: [5,3], tension: 0.4, pointRadius: 0 },
-              { label: 'Health',      data: [256,248,242,238,235,231,224,219,228], borderColor: C.cyan,     borderWidth: 2,   tension: 0.4, pointRadius: 0 },
-              { label: 'Term',        data: [388,381,372,366,360,354,342,336,349], borderColor: C.pb,       borderWidth: 2,   tension: 0.4, pointRadius: 0 },
-              { label: 'Motor',       data: [298,289,283,279,274,268,261,256,266], borderColor: C.violet,   borderWidth: 2,   tension: 0.4, pointRadius: 0 },
-              { label: 'Investments', data: [431,422,414,406,399,392,381,374,388], borderColor: C.amber,    borderWidth: 2,   tension: 0.4, pointRadius: 0 },
-            ] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { grid: noGrid }, y: { grid: GRID, ticks: { callback: v => '₹' + v } } } }} />
+            <Line
+              key={`ctr-${window}`}
+              data={{
+                labels: months,
+                datasets: [
+                  { label: 'CTR (%)',  data: filtered.map(d => d.ctr),  borderColor: C.pb,    borderWidth: 2, tension: 0.4, pointRadius: 2, yAxisID: 'y' },
+                  { label: 'CPI (₹)', data: filtered.map(d => d.cpi),  borderColor: C.red,   borderWidth: 2, tension: 0.4, pointRadius: 2, yAxisID: 'y2', borderDash: [4, 3] },
+                ],
+              }}
+              options={{
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                  x:  { grid: noGrid, ticks: { maxRotation: 45, font: { size: 10 } } },
+                  y:  { grid: GRID, position: 'left',  title: { display: true, text: 'CTR %' },  ticks: { callback: v => v + '%' } },
+                  y2: { position: 'right', title: { display: true, text: 'CPI ₹' }, grid: { display: false }, ticks: { callback: v => '₹' + v } },
+                },
+              }}
+            />
           </div>
         </div>
       </div>
 
-      {/* Channel scorecard */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-h"><h3>Channel performance scorecard</h3><span className="hint">click → verified-lead economics</span></div>
-        <table>
-          <thead><tr><th>Channel</th><th className="r">Clicks</th><th className="r">CTL</th><th className="r">CPL</th><th className="r">CVR</th><th className="r">Verified Leads</th><th className="r">CP Verified Lead</th></tr></thead>
-          <tbody>
-            {PERF_TABLE.map(r => (
-              <tr key={r.channel}>
-                <td><span className="pill" style={{ background: r.color + '1a', color: r.color }}>●</span> {r.channel}</td>
-                <td className="r mono">{r.clicks}</td>
-                <td className="r mono">{r.ctl}</td>
-                <td className="r mono">{r.cpl}</td>
-                <td className="r mono">{r.cvr}</td>
-                <td className="r mono">{r.verified}</td>
-                <td className="r mono">{r.cpv}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="foot-note">CTL = click→lead rate · CPL = cost per raw lead · CVR = lead→conversion · Verified Leads = call-centre validated · CP Verified Lead = cost per verified lead.</div>
-      </div>
-
-      {/* Pipeline */}
-      <div className="view-head" style={{ marginTop: 26, marginBottom: 14 }}>
-        <div>
-          <div className="eyebrow">Lead Lifecycle · Non-Converted</div>
-          <h2 style={{ fontSize: 20 }}>Where leads sit &amp; drop off — the full pipeline</h2>
-          <p>Post-lead lifecycle split by product: how many are in pipeline, where they drop, and how many are stuck at payment.</p>
-        </div>
-        <div className="view-meta">Snapshot: <b>8.6M leads YTD</b><br />0.61M converted · 8.0M in lifecycle</div>
-      </div>
-
-      <div className="grid g4">
-        <KpiCard accentColor={C.cyan}   name="In Pipeline (open)"  value="2.94" valueSuffix="M" delta="● 34% of leads active" deltaType="flat" />
-        <KpiCard accentColor={C.amber}  name="Awaiting Callback"   value="1.12" valueSuffix="M" delta="● agent queue" deltaType="flat" />
-        <KpiCard accentColor={C.violet} name="Payment Pending"     value="0.38" valueSuffix="M" delta="▲ recoverable revenue" />
-        <KpiCard accentColor={C.red}    name="Dropped / Lost"      value="4.55" valueSuffix="M" delta="▼ 53% leakage" deltaType="dn" />
-      </div>
-
-      <div className="grid g23">
-        <div className="card">
-          <div className="card-h"><h3>Post-lead stage funnel</h3><span className="hint">where the 8.6M leads are now</span></div>
-          <FunnelChart steps={PIPELINE_FUNNEL} />
-          <div className="foot-note">Each step shows leads remaining; % = share retained from previous stage.</div>
-        </div>
-        <div className="card">
-          <div className="card-h"><h3>Drop-off by stage</h3><span className="hint">% of leads lost at each step</span></div>
-          <div className="chh">
-            <Bar data={{ labels: ['Lead→Contact','Contact→Quote','Quote→Payment','Payment→Convert'], datasets: [{ label: 'Drop-off %', data: [26,36,76,38], backgroundColor: [C.amber, C.red, C.red, C.violet], borderRadius: 5 }] }}
-              options={{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.raw}% lost at this step` } } }, scales: { x: { grid: GRID, ticks: { callback: v => v + '%' } }, y: { grid: noGrid } } }} />
-          </div>
-        </div>
-      </div>
-
+      {/* ── Scorecard ─────────────────────────────────────────────────────── */}
       <div className="card">
-        <div className="card-h"><h3>Pipeline by product</h3><span className="hint">leads · stage split · per category</span></div>
+        <div className="card-h">
+          <h3>Scorecard — {months[0]} to {months[months.length - 1]}</h3>
+          <span className="hint">Best value per column highlighted in green</span>
+        </div>
         <table>
-          <thead><tr><th>Product</th><th className="r">Leads</th><th className="r">Contacted</th><th className="r">Quote shared</th><th className="r">Callback queue</th><th className="r">Payment pending</th><th className="r">Converted</th><th className="r">Dropped</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th className="r">Impressions</th>
+              <th className="r">Clicks</th>
+              <th className="r">Spends (₹)</th>
+              <th className="r">Installs</th>
+              <th className="r">CPI (₹)</th>
+              <th className="r">Signups</th>
+              <th className="r">CPS (₹)</th>
+              <th className="r">NAPs</th>
+              <th className="r">CTR %</th>
+            </tr>
+          </thead>
           <tbody>
-            {PIPELINE_TABLE.map(r => (
-              <tr key={r.product}>
-                <td><span className="pill" style={{ background: r.color + '1a', color: r.color }}>●</span> {r.product}</td>
-                <td className="r mono">{r.leads}</td>
-                <td className="r mono">{r.contacted}</td>
-                <td className="r mono">{r.quote}</td>
-                <td className="r mono" style={{ color: C.amber }}>{r.callback}</td>
-                <td className="r mono" style={{ color: C.violet }}>{r.payment}</td>
-                <td className="r mono" style={{ color: C.green }}>{r.converted}</td>
-                <td className="r mono" style={{ color: C.red }}>{r.dropped}</td>
+            {tableRows.map((r, i) => (
+              <tr key={r.month}>
+                <td style={{ fontWeight: 700 }}>{r.month}</td>
+                <td className="r mono">{fmtBig(r.impressions)}</td>
+                <td className="r mono">{fmtBig(r.clicks)}</td>
+                <td className="r mono">{fmtINR(r.spends)}</td>
+                <td className="r mono"><span style={i === bestInst ? greenCell : {}}>{fmtBig(r.installs)}</span></td>
+                <td className="r mono"><span style={i === bestCPI  ? greenCell : {}}>{fmtINR(r.cpi)}</span></td>
+                <td className="r mono"><span style={i === bestSig  ? greenCell : {}}>{fmtBig(r.signups)}</span></td>
+                <td className="r mono"><span style={i === bestCPS  ? greenCell : {}}>{fmtINR(r.cps)}</span></td>
+                <td className="r mono"><span style={i === bestNaps ? greenCell : {}}>{fmtBig(r.naps)}</span></td>
+                <td className="r mono"><span style={i === bestCTR  ? greenCell : {}}>{r.ctr}%</span></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="foot-note"><b>Contacted</b>: call-centre reached · <b>Quote shared</b>: comparison delivered · <b>Callback</b>: re-contact requested · <b>Payment pending</b>: plan chosen, payment incomplete · <b>Converted</b>: policy issued · <b>Dropped</b>: unreachable / lapsed.</div>
+        <div className="foot-note">
+          CPI = Cost per Install (lower is better) · CPS = Cost per Signup (lower is better) · CTR = Click-through rate (higher is better).
+          Green cells = best value in each column across the last 6 months.
+        </div>
       </div>
     </>
   );
