@@ -73,22 +73,41 @@ export default function PerformanceView() {
   const [data, setData]       = useState<CoinDCXRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
-  const [window, setWindow]   = useState<6 | 12 | 25>(6);
+  const [fromIdx, setFromIdx] = useState<number | null>(null);
+  const [toIdx,   setToIdx]   = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/coindcx')
       .then(r => r.json())
-      .then(json => { setData(json.data ?? []); setLoading(false); })
+      .then(json => {
+        const rows: CoinDCXRow[] = json.data ?? [];
+        setData(rows);
+        // default: last 6 months
+        setFromIdx(Math.max(0, rows.length - 6));
+        setToIdx(rows.length - 1);
+        setLoading(false);
+      })
       .catch(() => { setError('Failed to load data'); setLoading(false); });
   }, []);
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 14 }}>Loading CoinDCX data…</div>;
   if (error || !data.length) return <div style={{ padding: 40, textAlign: 'center', color: C.red, fontSize: 14 }}>{error || 'No data'}</div>;
 
-  const latest    = data[data.length - 1];                // most recent month (June'26)
-  const prev      = data[data.length - 2];
-  const filtered  = data.slice(-window);                  // respects the period toggle
+  const fi = fromIdx ?? 0;
+  const ti = toIdx   ?? data.length - 1;
+
+  const filtered  = data.slice(fi, ti + 1);
   const months    = filtered.map(d => d.month);
+  const latest    = filtered[filtered.length - 1];           // last month in selected range
+  const prev      = filtered.length > 1                      // month before it in range
+    ? filtered[filtered.length - 2]
+    : filtered[0];
+
+  // quick-range presets
+  function applyPreset(n: number) {
+    setFromIdx(Math.max(0, data.length - n));
+    setToIdx(data.length - 1);
+  }
 
   /* ── KPI deltas vs previous month ──────────────────────────────────────── */
   function delta(curr: number, p: number) {
@@ -120,25 +139,72 @@ export default function PerformanceView() {
           <div className="eyebrow">Performance · Lower Funnel</div>
           <h2>CoinDCX — Month-on-Month Intelligence</h2>
           <p>
-            Impressions → Clicks → Installs → Signups → NAPs · Latest: <b>{latest.month}</b> · Jun 2024 – Jun 2026
+            Impressions → Clicks → Installs → Signups → NAPs · Showing: <b>{months[0]}</b> – <b>{months[months.length - 1]}</b> ({filtered.length} months)
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-          {/* Period toggle */}
-          <div className="seg">
-            {([6, 12, 25] as const).map(w => (
-              <button
-                key={w}
-                className={window === w ? 'on' : ''}
-                onClick={() => setWindow(w)}
+
+          {/* ── Custom date range ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {/* From */}
+            <div className="chip">
+              <span className="lbl">From</span>
+              <select
+                value={fi}
+                onChange={e => {
+                  const v = Number(e.target.value);
+                  setFromIdx(v);
+                  if (v > ti) setToIdx(v);
+                }}
               >
-                {w === 6 ? '6M' : w === 12 ? '1Y' : '2Y'}
+                {data.map((d, i) => (
+                  <option key={i} value={i}>{d.month}</option>
+                ))}
+              </select>
+            </div>
+
+            <span style={{ color: 'var(--muted)', fontSize: 13, fontWeight: 600 }}>→</span>
+
+            {/* To */}
+            <div className="chip">
+              <span className="lbl">To</span>
+              <select
+                value={ti}
+                onChange={e => {
+                  const v = Number(e.target.value);
+                  setToIdx(v);
+                  if (v < fi) setFromIdx(v);
+                }}
+              >
+                {data.map((d, i) => (
+                  <option key={i} value={i}>{d.month}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quick presets */}
+            <div className="seg">
+              {([3, 6, 12] as const).map(n => (
+                <button
+                  key={n}
+                  className={filtered.length === n && ti === data.length - 1 ? 'on' : ''}
+                  onClick={() => applyPreset(n)}
+                >
+                  {n === 3 ? '3M' : n === 6 ? '6M' : '1Y'}
+                </button>
+              ))}
+              <button
+                className={fi === 0 && ti === data.length - 1 ? 'on' : ''}
+                onClick={() => { setFromIdx(0); setToIdx(data.length - 1); }}
+              >
+                All
               </button>
-            ))}
+            </div>
           </div>
+
           <div className="view-meta" style={{ textAlign: 'right' }}>
             Source: <b>CoinDCX M-O-M Dataset</b><br />
-            Showing: <b>{window === 25 ? 'Jun 24 – Jun 26' : window === 12 ? 'Last 12 months' : 'Last 6 months'}</b>
+            Showing <b>{filtered.length}</b> months: <b>{months[0]}</b> → <b>{months[months.length - 1]}</b>
           </div>
         </div>
       </div>
@@ -214,7 +280,7 @@ export default function PerformanceView() {
           </div>
         </div>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-          <div className="card-h" style={{ marginBottom: 2 }}><h3>June &apos;26 Snapshot</h3><span className="hint">latest month</span></div>
+          <div className="card-h" style={{ marginBottom: 2 }}><h3>{latest.month} Snapshot</h3><span className="hint">last month in range</span></div>
           {[
             { label: 'Total Impressions', value: fmtBig(latest.impressions), color: C.ink },
             { label: 'Total Clicks',      value: fmtBig(latest.clicks),      color: C.pb },
@@ -230,7 +296,7 @@ export default function PerformanceView() {
           ))}
           <div className="insight" style={{ marginTop: 'auto' }}>
             <div className="ico">!</div>
-            <div className="txt"><b>June spike:</b> Partial-month data — spends (₹{fmtINR(latest.spends)}) and installs ({fmtBig(latest.installs)}) reflect ~first week of June only.</div>
+            <div className="txt"><b>Note:</b> Values shown for <b>{latest.month}</b>. MoM delta compares against <b>{prev.month}</b>.</div>
           </div>
         </div>
       </div>
@@ -244,7 +310,7 @@ export default function PerformanceView() {
         <div className="card-sub">Volume trend for the selected period. Switch periods using the 6M / 1Y / 2Y toggle above.</div>
         <div className="chh lg">
           <Line
-            key={`trend-${window}`}
+            key={`trend-${fi}-${ti}`}
             data={{
               labels: months,
               datasets: [
@@ -289,7 +355,7 @@ export default function PerformanceView() {
           <div className="card-h"><h3>Monthly Spends (₹)</h3><span className="hint">total media spend</span></div>
           <div className="chh">
             <Bar
-              key={`spends-${window}`}
+              key={`spends-${fi}-${ti}`}
               data={{
                 labels: months,
                 datasets: [{
@@ -311,7 +377,7 @@ export default function PerformanceView() {
           <div className="card-h"><h3>CTR &amp; CPI Trend</h3><span className="hint">efficiency over time</span></div>
           <div className="chh">
             <Line
-              key={`ctr-${window}`}
+              key={`ctr-${fi}-${ti}`}
               data={{
                 labels: months,
                 datasets: [
