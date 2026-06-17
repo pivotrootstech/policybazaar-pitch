@@ -1,5 +1,5 @@
 export type MediaMode = 'combo' | 'tv' | 'digital';
-export type ViewId = 'overview' | 'brand' | 'performance' | 'markets' | 'attribution' | 'competition';
+export type ViewId = 'overview' | 'brand' | 'brandperf' | 'performance' | 'markets' | 'attribution' | 'competition';
 export type AttrModel = 'mmm' | 'dda' | 'lt';
 
 export interface MediaKPIs {

@@ -29,8 +29,8 @@ const NAV = [
     group: 'Intelligence',
     items: [
       {
-        id: 'attribution' as ViewId, label: 'Brand → Performance', badge: '★',
-        icon: <><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M7.5 6.7L16.5 11M7.5 17.3L16.5 13"/></>,
+        id: 'brandperf' as ViewId, label: 'Brand Performance', badge: 'Digital',
+        icon: <><path d="M3 12h4l3-9 4 18 3-9h4"/></>,
       },
       {
         id: 'competition' as ViewId, label: 'Competitive SOV', badge: null,

@@ -43,10 +43,10 @@ export default function BrandView() {
       </div>
 
       <div className="grid g4">
-        <KpiCard accentColor={C.pb}     name="1+ Net Reach"     value={m.reachPct} valueSuffix="%" delta={m.brDelta}     footLeft={m.brFoot} />
-        <KpiCard accentColor={C.amber}  name="Avg Frequency"    value={m.freq}     valueSuffix="x" delta="● optimal band 3–5" deltaType="flat" footLeft={m.freqFoot} />
-        <KpiCard accentColor={C.cyan}   name="Video VTR"        value={m.vtr}      valueSuffix="%" delta={m.vtrDelta}    footLeft={m.vtrFoot} />
-        <KpiCard accentColor={C.violet} name="High-Income Reach" value={m.hi}      valueSuffix="%" delta="▲ NCCS A / ₹15L+ HHI" footLeft="fixed-impression buys" />
+        <KpiCard accentColor={C.pb}     name="1+ Net Reach"      value={m.reachPct} valueSuffix="%" delta={m.brDelta}     footLeft={m.brFoot} />
+        <KpiCard accentColor={C.amber}  name="Avg Frequency"     value={m.freq}     valueSuffix="x" delta="● optimal band 3–5" deltaType="flat" footLeft={m.freqFoot} />
+        <KpiCard accentColor={C.cyan}   name="Video VTR"         value={m.vtr}      valueSuffix="%" delta={m.vtrDelta}    footLeft={m.vtrFoot} />
+        <KpiCard accentColor={C.violet} name="High-Income Reach" value={m.hi}       valueSuffix="%" delta="▲ NCCS A / ₹15L+ HHI" footLeft="fixed-impression buys" />
       </div>
 
       {/* R&F curve + Frequency dist */}
@@ -146,10 +146,10 @@ export default function BrandView() {
       </div>
 
       <div className="grid g4">
-        <KpiCard accentColor={C.ink}   name="Total GRPs"        value="1,240" delta="▲ vs 1,150 planned"     footLeft="target-GRPs · TG" />
-        <KpiCard accentColor={C.pb}    name="Category SOV (GRP)" value="31" valueSuffix="%" delta="▲ leads category" footLeft="share of category GRPs" />
-        <KpiCard accentColor={C.cyan}  name="Reach 1+ / 3+"     value="64" valueSuffix="%"  delta="▲ 3+ above 40% threshold" footLeft="net of TV panel" />
-        <KpiCard accentColor={C.amber} name="CPRP · actual"      value="₹172" delta="▼ vs ₹185 planned" deltaType="up" footLeft="cost / rating point" />
+        <KpiCard accentColor={C.ink}   name="Total GRPs"         value="1,240" delta="▲ vs 1,150 planned"      footLeft="target-GRPs · TG" />
+        <KpiCard accentColor={C.pb}    name="Category SOV (GRP)" value="31"    valueSuffix="%" delta="▲ leads category" footLeft="share of category GRPs" />
+        <KpiCard accentColor={C.cyan}  name="Reach 1+ / 3+"      value="64"    valueSuffix="%" delta="▲ 3+ above 40% threshold" footLeft="net of TV panel" />
+        <KpiCard accentColor={C.amber} name="CPRP · actual"       value="₹172" delta="▼ vs ₹185 planned" deltaType="up" footLeft="cost / rating point" />
       </div>
 
       <div className="grid g2">
