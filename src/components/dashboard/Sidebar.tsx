@@ -29,7 +29,7 @@ const NAV = [
     group: 'Intelligence',
     items: [
       {
-        id: 'brandperf' as ViewId, label: 'Brand Performance', badge: 'Digital',
+        id: 'attribution' as ViewId, label: 'Brand → Performance', badge: '★',
         icon: <><path d="M3 12h4l3-9 4 18 3-9h4"/></>,
       },
       {
