@@ -6,7 +6,7 @@ import {
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 import { C } from '@/lib/colors';
-import type { CoinDCXRow } from '@/app/api/coindcx/route';
+import type { DemoRow } from '@/app/api/Demo/route';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, BubbleController, Title, Tooltip, Legend, Filler);
 
@@ -32,7 +32,7 @@ function bestIdx(arr: number[], higher = true): number {
 }
 
 /* ── funnel component ────────────────────────────────────────────────────── */
-function CoinFunnel({ row }: { row: CoinDCXRow }) {
+function CoinFunnel({ row }: { row: DemoRow }) {
   const stages = [
     { label: 'Impressions', sub: 'top of funnel',  value: row.impressions, color: C.ink },
     { label: 'Clicks',      sub: 'paid traffic',   value: row.clicks,      color: C.pb },
@@ -70,17 +70,17 @@ function CoinFunnel({ row }: { row: CoinDCXRow }) {
 
 /* ── main view ───────────────────────────────────────────────────────────── */
 export default function PerformanceView() {
-  const [data, setData]       = useState<CoinDCXRow[]>([]);
+  const [data, setData]       = useState<DemoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [fromIdx, setFromIdx] = useState<number | null>(null);
   const [toIdx,   setToIdx]   = useState<number | null>(null);
 
   useEffect(() => {
-    fetch('/api/coindcx')
+    fetch('/api/Demo')
       .then(r => r.json())
       .then(json => {
-        const rows: CoinDCXRow[] = json.data ?? [];
+        const rows: DemoRow[] = json.data ?? [];
         setData(rows);
         // default: last 6 months
         setFromIdx(Math.max(0, rows.length - 6));
@@ -90,7 +90,7 @@ export default function PerformanceView() {
       .catch(() => { setError('Failed to load data'); setLoading(false); });
   }, []);
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 14 }}>Loading CoinDCX data…</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 14 }}>Loading Demo data…</div>;
   if (error || !data.length) return <div style={{ padding: 40, textAlign: 'center', color: C.red, fontSize: 14 }}>{error || 'No data'}</div>;
 
   const fi = fromIdx ?? 0;
@@ -137,7 +137,7 @@ export default function PerformanceView() {
       <div className="view-head">
         <div>
           <div className="eyebrow">Performance · Lower Funnel</div>
-          <h2>CoinDCX — Month-on-Month Intelligence</h2>
+          <h2>Demo — Month-on-Month Intelligence</h2>
           <p>
             Impressions → Clicks → Installs → Signups → NAPs · Showing: <b>{months[0]}</b> – <b>{months[months.length - 1]}</b> ({filtered.length} months)
           </p>
@@ -203,7 +203,7 @@ export default function PerformanceView() {
           </div>
 
           <div className="view-meta" style={{ textAlign: 'right' }}>
-            Source: <b>CoinDCX M-O-M Dataset</b><br />
+            Source: <b>Demo M-O-M Dataset</b><br />
             Showing <b>{filtered.length}</b> months: <b>{months[0]}</b> → <b>{months[months.length - 1]}</b>
           </div>
         </div>

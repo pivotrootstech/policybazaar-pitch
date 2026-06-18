@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import path from 'path';
 import fs from 'fs';
 
-export interface CoinDCXRow {
+export interface DemoRow {
   month:       string;
   impressions: number;
   clicks:      number;
@@ -32,14 +32,14 @@ function fmt(n: number, decimals = 2): number {
 
 export async function GET() {
   try {
-    const filePath = path.join(process.cwd(), 'public', 'data', 'coindcx.xlsx');
+    const filePath = path.join(process.cwd(), 'public', 'data', 'Demo.xlsx');
     const buf  = fs.readFileSync(filePath);
     const wb   = XLSX.read(buf, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const raw  = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1 }) as (string | number)[][];
 
     // row 0 = empty, row 1 = header, rows 2+ = data
-    const rows: CoinDCXRow[] = raw.slice(2)
+    const rows: DemoRow[] = raw.slice(2)
       .filter(r => r[2] !== undefined && r[3] !== undefined)
       .map(r => {
         const imp  = Number(r[3]) || 0;
@@ -66,7 +66,7 @@ export async function GET() {
 
     return NextResponse.json({ data: rows });
   } catch (err) {
-    console.error('CoinDCX API error:', err);
+    console.error('Demo API error:', err);
     return NextResponse.json({ error: 'Failed to load data' }, { status: 500 });
   }
 }

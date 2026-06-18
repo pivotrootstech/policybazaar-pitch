@@ -117,7 +117,7 @@ export async function GET() {
       },
     });
   } catch (err) {
-    console.error('CoinDCX brand data error:', err);
+    console.error('Demo brand data error:', err);
     return NextResponse.json({ error: 'Failed to load data' }, { status: 500 });
   }
 }

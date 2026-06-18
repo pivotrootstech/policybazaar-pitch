@@ -7,7 +7,7 @@ import {
 import { Bar, Doughnut, Chart } from 'react-chartjs-2';
 import { C } from '@/lib/colors';
 import KpiCard from '@/components/ui/KpiCard';
-import type { BrandRecord, BrandDataResponse } from '@/app/api/coindcx-jan25/route';
+import type { BrandRecord, BrandDataResponse } from '@/app/api/Demo-jan25/route';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend);
 
@@ -161,7 +161,7 @@ export default function BrandPerfView() {
   const [selAdTypes, setSelAdTypes] = useState<string[]>([]);
 
   useEffect(() => {
-    fetch('/api/coindcx-jan25')
+    fetch('/api/Demo-jan25')
       .then(r => r.json())
       .then((d: BrandDataResponse) => {
         setAllRecords(d.records);
@@ -251,7 +251,7 @@ export default function BrandPerfView() {
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="view-head">
         <div>
-          <div className="eyebrow">CoinDCX · RAW Sheet · Digital only</div>
+          <div className="eyebrow">Demo · RAW Sheet · Digital only</div>
           <h2>Brand Performance</h2>
         </div>
         <div className="view-meta" style={{ textAlign: 'right' }}>

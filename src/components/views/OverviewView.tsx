@@ -12,7 +12,7 @@ import {
 } from '@/lib/data';
 import KpiCard from '@/components/ui/KpiCard';
 import FunnelChart from '@/components/ui/FunnelChart';
-import type { BrandDataResponse } from '@/app/api/coindcx-jan25/route';
+import type { BrandDataResponse } from '@/app/api/Demo-jan25/route';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -65,7 +65,7 @@ export default function OverviewView() {
   const [brand, setBrand] = useState<BrandDataResponse | null>(null);
 
   useEffect(() => {
-    fetch('/api/coindcx-jan25')
+    fetch('/api/Demo-jan25')
       .then(r => r.json())
       .then((d: BrandDataResponse) => setBrand(d))
       .catch(() => {});
@@ -114,7 +114,7 @@ export default function OverviewView() {
         </div>
         <div className="view-meta" style={{ textAlign: 'right' }}>
           FY 26–27 · PolicyBazaar<br />
-          <b>Data: CoinDCX Jan–Jun 2026</b>
+          <b>Data: Demo Jan–Jun 2026</b>
         </div>
       </div>
 
@@ -122,14 +122,14 @@ export default function OverviewView() {
       <div className="grid g4">
         <KpiCard
           accentColor={C.pb}
-          name="Digital Impressions"
+          name="Overall Impressions"
           value={ot ? fmtB(ot.impressions) : '—'}
           delta={ot ? `CTR ${ot.ctr.toFixed(3)}%` : 'loading…'}
           footLeft={brand ? `${brand.months.length} months · ${brand.publishers.length} publishers` : ''}
         />
         <KpiCard
           accentColor={C.green}
-          name="Digital Spends"
+          name="Total Spends"
           value={ot ? fmtCr(ot.spends) : '—'}
           delta={ot ? `CPM ₹${ot.avgCPM.toFixed(0)}` : ''}
           footLeft="digital only · excl. TV/Print"
@@ -151,7 +151,7 @@ export default function OverviewView() {
       </div>
 
       {/* ── Digital Campaign ────────────────────────────────────────────── */}
-      <SectionHead title="Digital Campaign Performance" sub="CoinDCX RAW sheet · all months" accent={C.pb} />
+      <SectionHead title="Digital Campaign Performance" sub="Demo RAW sheet · all months" accent={C.pb} />
       <div className="grid g23">
         <div className="card">
           <div className="card-h">
@@ -395,7 +395,9 @@ export default function OverviewView() {
 
         {/* Brand lift */}
         <div className="card">
-          <div className="card-h"><h3>Brand lift study</h3><span className="hint">pre vs post · Δ pts</span></div>
+          <div className="card-h"><h3>Brand lift study Analysis</h3>
+          {/* <span className="hint">pre vs post · Δ pts</span> */}
+          </div>
           <div className="chh sm">
             <Bar
               data={{
@@ -435,7 +437,7 @@ export default function OverviewView() {
         </div>
       </div>
 
-      <div className="foot-note">Illustrative dataset modelled on the PolicyBazaar brand media brief. Digital figures sourced from CoinDCX Jan–Jun 2026 RAW sheet. Funnel, market and competition data are simulated for demonstration.</div>
+      <div className="foot-note">Illustrative dataset modelled on the PolicyBazaar brand media brief. Digital figures sourced from Demo Jan–Jun 2026 RAW sheet. Funnel, market and competition data are simulated for demonstration.</div>
     </>
   );
 }
